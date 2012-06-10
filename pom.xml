@@ -58,14 +58,14 @@
 			<dependency>
 				<groupId>org.openmrs.module</groupId>
 				<artifactId>htmlformentry-api</artifactId>
-				<version>${htmlFormEntryVersion}</version>
+				<version>1.9.5-SNAPSHOT</version>
 				<type>jar</type>
 				<scope>provided</scope>
 			</dependency>
 			<dependency>
 		        <groupId>org.openmrs.module</groupId>
 		        <artifactId>htmlformentry-api</artifactId>
-		        <version>${htmlFormEntryVersion}</version>
+		        <version>1.9.5-SNAPSHOT</version>
 		        <classifier>tests</classifier>
 		        <scope>test</scope>
 		    </dependency>

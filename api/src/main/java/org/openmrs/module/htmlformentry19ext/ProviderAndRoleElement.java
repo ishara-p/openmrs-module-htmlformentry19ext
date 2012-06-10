@@ -28,14 +28,11 @@ import org.openmrs.Person;
 import org.openmrs.Provider;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.htmlformentry.BadFormDesignException;
-import org.openmrs.module.htmlformentry.FormEntryContext;
+import org.openmrs.module.htmlformentry.*;
 import org.openmrs.module.htmlformentry.FormEntryContext.Mode;
-import org.openmrs.module.htmlformentry.FormEntrySession;
-import org.openmrs.module.htmlformentry.FormSubmissionError;
 import org.openmrs.module.htmlformentry.action.FormSubmissionControllerAction;
 import org.openmrs.module.htmlformentry.element.HtmlGeneratorElement;
-import org.openmrs.module.htmlformentry.widget.ErrorWidget;
+import org.openmrs.module.htmlformentry.widget.*;
 import org.springframework.util.StringUtils;
 
 
@@ -48,15 +45,19 @@ public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmiss
 
 	EncounterRoleWidget roleWidget;
 	ErrorWidget roleErrorWidget;
-	ProviderWidget providerWidget;
+	SingleOptionWidget providerWidget;
 	ErrorWidget providerErrorWidget;
 	
 	// in case EncounterRole is specified as a parameter to the tag
 	EncounterRole encounterRole;
+
+    // the options lists to be used for provider widget
+    List<Option> providerOptions = new ArrayList<Option>();
 	
 	/**
+     * @param context
      * @param parameters
-	 * @throws BadFormDesignException 
+	 * @throws BadFormDesignException
      */
     public ProviderAndRoleElement(FormEntryContext context, Map<String, String> parameters) throws BadFormDesignException {
     	if (parameters.containsKey("required"))
@@ -78,30 +79,36 @@ public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmiss
     		context.registerWidget(roleWidget);
     		context.registerErrorWidget(roleWidget, roleErrorWidget);
     	}
-    	providerWidget = new ProviderWidget();
+
+        // populate the provider widget and register it
     	providerErrorWidget = new ErrorWidget();
-    	context.registerWidget(providerWidget);
-    	context.registerErrorWidget(providerWidget, providerErrorWidget);
-    	
+        if (("autocomplete").equals(parameters.get("type"))){
+             providerWidget = new AutocompleteWidget();
+        } else {
+             providerWidget = new DropdownWidget();
+        }
+
     	boolean initialProviderSet = false;
+        Set<Provider> providerByRole;
+        Map<EncounterRole, Set<Provider>> providerByRoles;
     	if (context.getExistingEncounter() != null) {
     		if (encounterRole != null) {
-    			Set<Provider> byRole = context.getExistingEncounter().getProvidersByRole(encounterRole);
-    			if (byRole.size() == 1) {
-    				providerWidget.setInitialValue(byRole.iterator().next());
+    			providerByRole = context.getExistingEncounter().getProvidersByRole(encounterRole);
+    			if (providerByRole.size() == 1) {
+    				providerWidget.setInitialValue(providerByRole.iterator().next());
     				initialProviderSet = true;
-    			} else if (byRole.size() > 1) {
+    			} else if (providerByRole.size() > 1) {
     				throw new BadFormDesignException("HTML Form Entry does not (yet) support multiple providers with the same encounter role");
-    			} 
+    			}
     		} else {
-    			Map<EncounterRole, Set<Provider>> byRoles = context.getExistingEncounter().getProvidersByRoles();
-    			if (byRoles.size() > 0) {
+    			providerByRoles = context.getExistingEncounter().getProvidersByRoles();
+    			if (providerByRoles.size() > 0) {
         			// currently we only support a single provider in this mode
-        			if (byRoles.size() > 1 || byRoles.values().iterator().next().size() > 1) {
+        			if (providerByRoles.size() > 1 || providerByRoles.values().iterator().next().size() > 1) {
         				throw new BadFormDesignException("HTML Form Entry does not (yet) support multiple providers per encounter if you don't specify an encounterRole for each of them");
         			}
         			
-    				Entry<EncounterRole, Set<Provider>> roleAndProvider = byRoles.entrySet().iterator().next();
+    				Entry<EncounterRole, Set<Provider>> roleAndProvider = providerByRoles.entrySet().iterator().next();
     				Provider p = roleAndProvider.getValue().iterator().next();
     				providerWidget.setInitialValue(p);
     				initialProviderSet = true;
@@ -129,6 +136,39 @@ public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmiss
     			providerWidget.setInitialValue(provider);
     		}
     	}
+
+         List<Provider> providers = Context.getProviderService().getAllProviders(true);
+         // 'initialValueIsSet' checks whether the provider widget has an initial value or default value assigned
+         boolean initialValueIsSet= false;
+         if(!providers.isEmpty()){
+                 for(Provider provider: providers){
+                     String label = provider.getName();
+                     initialValueIsSet= label != null && label.equals(providerWidget.getInitialValue());
+                     Option option = new Option(label, provider.getId().toString(),initialValueIsSet);
+                     providerOptions.add(option);
+                 }
+         }
+         if (("autocomplete").equals(parameters.get("type"))){
+
+             providerWidget.addOption(new Option());
+             if(!providerOptions.isEmpty()){
+                 providerWidget.setOptions(providerOptions);
+             }
+
+         }   else {
+             providerWidget.addOption(new Option
+               (Context.getMessageSourceService().getMessage("htmlformentry19ext.chooseAProvider"),"",!initialValueIsSet)); // if no initial or default value
+                // this is the first option of the drop down menu
+             if(!providerOptions.isEmpty()){
+                 for(Option option: providerOptions){
+                     providerWidget.addOption(option);
+                 }
+
+             }
+         }
+
+         context.registerWidget(providerWidget);
+    	 context.registerErrorWidget(providerWidget, providerErrorWidget);
     }
 
 	/**
@@ -167,7 +207,10 @@ public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmiss
         		ret.add(new FormSubmissionError(roleWidget, Context.getMessageSourceService().getMessage("htmlformentry.error.required")));
     	}
     	if (providerWidget != null) {
-    		provider = (Provider) providerWidget.getValue(context, submission);
+    		Object value = providerWidget.getValue(context, submission);
+            provider = (Provider)convertValueToProvider(value);
+            //
+            // provider = (Provider) HtmlFormEntryUtil.convertToType(value.toString(), Provider.class);
     		if (provider == null)
         		ret.add(new FormSubmissionError(providerWidget, Context.getMessageSourceService().getMessage("htmlformentry.error.required")));
     	}
@@ -185,7 +228,9 @@ public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmiss
     		role = (EncounterRole) roleWidget.getValue(session.getContext(), submission);
     	}
     	if (providerWidget != null) {
-    		provider = (Provider) providerWidget.getValue(session.getContext(), submission);
+    		Object value = providerWidget.getValue(session.getContext(), submission);
+            provider = (Provider)convertValueToProvider(value);
+            //provider = (Provider) HtmlFormEntryUtil.convertToType(value.toString(), Provider.class);
     	}
     	if (provider != null) {
     		session.getSubmissionActions().getCurrentEncounter().setProvider(role, provider);
@@ -195,6 +240,19 @@ public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmiss
     		for (Provider p : encounter.getProvidersByRole(role))
     			encounter.removeProvider(role, p);
     	}
+    }
+
+  /**
+     * Gets provider id and obtains the Provider from it
+     * @param value - provider id
+     * @return  the Provider object of corresponding id
+     */
+    private Object convertValueToProvider(Object value) {
+        String val = (String)value;
+            if (StringUtils.hasText(val)) {
+        	return Context.getProviderService().getProvider(Integer.valueOf(val));
+            }
+        return null;
     }
 
 }

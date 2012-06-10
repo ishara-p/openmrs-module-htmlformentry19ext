@@ -100,7 +100,7 @@ public class IntegrationTest extends BaseModuleContextSensitiveTest {
 
 			@Override
 			public void testBlankFormHtml(String html) {
-				Assert.assertTrue(html.contains("<option selected=\"true\" value=\"2\">"));
+				Assert.assertTrue(html.contains("<option value=\"2\" selected=\"true\">"));
 			};
 		}.run();
 	}
