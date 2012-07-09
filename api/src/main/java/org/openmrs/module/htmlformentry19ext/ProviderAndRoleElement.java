@@ -22,10 +22,7 @@ import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 
-import org.openmrs.Encounter;
-import org.openmrs.EncounterRole;
-import org.openmrs.Person;
-import org.openmrs.Provider;
+import org.openmrs.*;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.htmlformentry.*;
@@ -41,217 +38,220 @@ import org.springframework.util.StringUtils;
  */
 public class ProviderAndRoleElement implements HtmlGeneratorElement, FormSubmissionControllerAction {
 
-	boolean required = false;
+    boolean required = false;
 
-	EncounterRoleWidget roleWidget;
-	ErrorWidget roleErrorWidget;
-	SingleOptionWidget providerWidget;
-	ErrorWidget providerErrorWidget;
-	
-	// in case EncounterRole is specified as a parameter to the tag
-	EncounterRole encounterRole;
+    EncounterRoleWidget roleWidget;
+    ErrorWidget roleErrorWidget;
+    SingleOptionWidget providerWidget;
+    ErrorWidget providerErrorWidget;
+
+    // in case EncounterRole is specified as a parameter to the tag
+    EncounterRole encounterRole;
 
     // the options lists to be used for provider widget
     List<Option> providerOptions = new ArrayList<Option>();
-	
-	/**
+
+    /**
      * @param context
      * @param parameters
-	 * @throws BadFormDesignException
+     * @throws BadFormDesignException
      */
     public ProviderAndRoleElement(FormEntryContext context, Map<String, String> parameters) throws BadFormDesignException {
-    	if (parameters.containsKey("required"))
-    		required = Boolean.valueOf(parameters.get("required"));
-    	if (parameters.containsKey("encounterRole")) {
-    		EncounterService es = Context.getEncounterService();
-    		String param = parameters.get("encounterRole");
-    		try {
-    			encounterRole = es.getEncounterRole(Integer.valueOf(param));
-    		} catch (Exception ex) {
-    			encounterRole = es.getEncounterRoleByUuid(param);
-    		}
-    		if (encounterRole == null)
-    			throw new BadFormDesignException("Cannot find EncounterRole \"" + param + "\"");
-    		
-    	} else {
-    		roleWidget = new EncounterRoleWidget();
-    		roleErrorWidget = new ErrorWidget();
-    		context.registerWidget(roleWidget);
-    		context.registerErrorWidget(roleWidget, roleErrorWidget);
-    	}
+        if (parameters.containsKey("required"))
+            required = Boolean.valueOf(parameters.get("required"));
+        if (parameters.containsKey("encounterRole")) {
+            EncounterService es = Context.getEncounterService();
+            String param = parameters.get("encounterRole");
+            try {
+                encounterRole = es.getEncounterRole(Integer.valueOf(param));
+            } catch (Exception ex) {
+                encounterRole = es.getEncounterRoleByUuid(param);
+            }
+            if (encounterRole == null)
+                throw new BadFormDesignException("Cannot find EncounterRole \"" + param + "\"");
 
-        // populate the provider widget and register it
-    	providerErrorWidget = new ErrorWidget();
-        if (("autocomplete").equals(parameters.get("type"))){
-             providerWidget = new AutocompleteWidget();
         } else {
-             providerWidget = new DropdownWidget();
+            roleWidget = new EncounterRoleWidget();
+            roleErrorWidget = new ErrorWidget();
+            context.registerWidget(roleWidget);
+            context.registerErrorWidget(roleWidget, roleErrorWidget);
         }
 
-    	boolean initialProviderSet = false;
+        // populate the provider widget and register it
+        providerErrorWidget = new ErrorWidget();
+        if (("autocomplete").equals(parameters.get("type"))) {
+            providerWidget = new AutocompleteWidget(Provider.class);
+        } else {
+            providerWidget = new DropdownWidget();
+        }
+
+        boolean initialProviderSet = false;
         Set<Provider> providerByRole;
         Map<EncounterRole, Set<Provider>> providerByRoles;
-    	if (context.getExistingEncounter() != null) {
-    		if (encounterRole != null) {
-    			providerByRole = context.getExistingEncounter().getProvidersByRole(encounterRole);
-    			if (providerByRole.size() == 1) {
-    				providerWidget.setInitialValue(providerByRole.iterator().next());
-    				initialProviderSet = true;
-    			} else if (providerByRole.size() > 1) {
-    				throw new BadFormDesignException("HTML Form Entry does not (yet) support multiple providers with the same encounter role");
-    			}
-    		} else {
-    			providerByRoles = context.getExistingEncounter().getProvidersByRoles();
-    			if (providerByRoles.size() > 0) {
-        			// currently we only support a single provider in this mode
-        			if (providerByRoles.size() > 1 || providerByRoles.values().iterator().next().size() > 1) {
-        				throw new BadFormDesignException("HTML Form Entry does not (yet) support multiple providers per encounter if you don't specify an encounterRole for each of them");
-        			}
-        			
-    				Entry<EncounterRole, Set<Provider>> roleAndProvider = providerByRoles.entrySet().iterator().next();
-    				Provider p = roleAndProvider.getValue().iterator().next();
-    				providerWidget.setInitialValue(p);
-    				initialProviderSet = true;
-    				roleWidget.setInitialValue(roleAndProvider.getKey());
-    			}
-    		}
-    	}
-    	
-    	if (!initialProviderSet && providerWidget != null && StringUtils.hasText(parameters.get("default"))) {
-    		String temp = parameters.get("default");
-    		Provider provider = null;
-    		if ("currentUser".equals(temp)) {
-    			Person me = Context.getAuthenticatedUser().getPerson();
-    			Collection<Provider> candidates = Context.getProviderService().getProvidersByPerson(me);
-    			if (candidates.size() > 0)
-    				provider = candidates.iterator().next();
-    		} else {
-	    		try {
-	    			provider = Context.getProviderService().getProvider(Integer.valueOf(temp));
-	    		} catch (Exception ex) {
-	    			provider = Context.getProviderService().getProviderByUuid(temp);
-	    		}
-    		}
-    		if (provider != null) {
-    			providerWidget.setInitialValue(provider);
-    		}
-    	}
+        if (context.getExistingEncounter() != null) {
+            if (encounterRole != null) {
+                providerByRole = context.getExistingEncounter().getProvidersByRole(encounterRole);
+                if (providerByRole.size() == 1) {
+                    providerWidget.setInitialValue(providerByRole.iterator().next());
+                    initialProviderSet = true;
+                } else if (providerByRole.size() > 1) {
+                    throw new BadFormDesignException("HTML Form Entry does not (yet) support multiple providers with the same encounter role");
+                }
+            } else {
+                providerByRoles = context.getExistingEncounter().getProvidersByRoles();
+                if (providerByRoles.size() > 0) {
+                    // currently we only support a single provider in this mode
+                    if (providerByRoles.size() > 1 || providerByRoles.values().iterator().next().size() > 1) {
+                        throw new BadFormDesignException("HTML Form Entry does not (yet) support multiple providers per encounter if you don't specify an encounterRole for each of them");
+                    }
 
-         List<Provider> providers = Context.getProviderService().getAllProviders(true);
-         // 'initialValueIsSet' checks whether the provider widget has an initial value or default value assigned
-         boolean initialValueIsSet= false;
-         if(!providers.isEmpty()){
-                 for(Provider provider: providers){
-                     String label = provider.getName();
-                     initialValueIsSet= label != null && label.equals(providerWidget.getInitialValue());
-                     Option option = new Option(label, provider.getId().toString(),initialValueIsSet);
-                     providerOptions.add(option);
-                 }
-         }
-         if (("autocomplete").equals(parameters.get("type"))){
+                    Entry<EncounterRole, Set<Provider>> roleAndProvider = providerByRoles.entrySet().iterator().next();
+                    Provider p = roleAndProvider.getValue().iterator().next();
+                    providerWidget.setInitialValue(p);
+                    initialProviderSet = true;
+                    roleWidget.setInitialValue(roleAndProvider.getKey());
+                }
+            }
+        }
 
-             providerWidget.addOption(new Option());
-             if(!providerOptions.isEmpty()){
-                 providerWidget.setOptions(providerOptions);
-             }
+        if (!initialProviderSet && providerWidget != null && StringUtils.hasText(parameters.get("default"))) {
+            String temp = parameters.get("default");
+            Provider provider = null;
+            if ("currentUser".equals(temp)) {
+                Person me = Context.getAuthenticatedUser().getPerson();
+                Collection<Provider> candidates = Context.getProviderService().getProvidersByPerson(me);
+                if (candidates.size() > 0)
+                    provider = candidates.iterator().next();
+            } else {
+                try {
+                    provider = Context.getProviderService().getProvider(Integer.valueOf(temp));
+                } catch (Exception ex) {
+                    provider = Context.getProviderService().getProviderByUuid(temp);
+                }
+            }
+            if (provider != null) {
+                providerWidget.setInitialValue(provider);
+            }
+        }
 
-         }   else {
-             providerWidget.addOption(new Option
-               (Context.getMessageSourceService().getMessage("htmlformentry19ext.chooseAProvider"),"",!initialValueIsSet)); // if no initial or default value
-                // this is the first option of the drop down menu
-             if(!providerOptions.isEmpty()){
-                 for(Option option: providerOptions){
-                     providerWidget.addOption(option);
-                 }
+        List<Provider> providers = Context.getProviderService().getAllProviders(true);
+        // 'initialValueIsSet' checks whether the provider widget has an initial value or default value assigned
+        boolean initialValueIsSet = false;
+        if (!providers.isEmpty()) {
+            for (Provider provider : providers) {
+                String label = provider.getName();
+                initialValueIsSet = label != null && label.equals(providerWidget.getInitialValue());
+                Option option = new Option(label, provider.getId().toString(), initialValueIsSet);
+                providerOptions.add(option);
+            }
+        }
+        if (("autocomplete").equals(parameters.get("type"))) {
 
-             }
-         }
+            providerWidget.addOption(new Option());
+            if (!providerOptions.isEmpty()) {
+                providerWidget.setOptions(providerOptions);
+            }
 
-         context.registerWidget(providerWidget);
-    	 context.registerErrorWidget(providerWidget, providerErrorWidget);
+        } else {
+            providerWidget.addOption(new Option
+                    (Context.getMessageSourceService().getMessage("htmlformentry19ext.chooseAProvider"), "", !initialValueIsSet)); // if no initial or default value
+            // this is the first option of the drop down menu
+            if (!providerOptions.isEmpty()) {
+                for (Option option : providerOptions) {
+                    providerWidget.addOption(option);
+                }
+
+            }
+        }
+
+        context.registerWidget(providerWidget);
+        context.registerErrorWidget(providerWidget, providerErrorWidget);
     }
 
-	/**
+    /**
      * @see org.openmrs.module.htmlformentry.element.HtmlGeneratorElement#generateHtml(org.openmrs.module.htmlformentry.FormEntryContext)
      */
     @Override
     public String generateHtml(FormEntryContext context) {
-    	StringBuilder ret = new StringBuilder();
-    	if (roleWidget != null) {
-    		ret.append(roleWidget.generateHtml(context));
-    		if (context.getMode() != Mode.VIEW)
-    			ret.append(roleErrorWidget.generateHtml(context));
-    		ret.append(": ");
-    	}
-    	if (providerWidget != null) {
-			ret.append(providerWidget.generateHtml(context));
-			if (context.getMode() != Mode.VIEW)
-				ret.append(providerErrorWidget.generateHtml(context));
-		}
-	    return ret.toString();
+        StringBuilder ret = new StringBuilder();
+        if (roleWidget != null) {
+            ret.append(roleWidget.generateHtml(context));
+            if (context.getMode() != Mode.VIEW)
+                ret.append(roleErrorWidget.generateHtml(context));
+            ret.append(": ");
+        }
+        if (providerWidget != null) {
+            ret.append(providerWidget.generateHtml(context));
+            if (context.getMode() != Mode.VIEW)
+                ret.append(providerErrorWidget.generateHtml(context));
+        }
+        return ret.toString();
     }
-    
+
     /**
      * @see org.openmrs.module.htmlformentry.action.FormSubmissionControllerAction#validateSubmission(org.openmrs.module.htmlformentry.FormEntryContext, javax.servlet.http.HttpServletRequest)
      */
     @Override
     public Collection<FormSubmissionError> validateSubmission(FormEntryContext context, HttpServletRequest submission) {
-    	if (!required)
-    		return null;
-    	EncounterRole role = encounterRole;
-    	Provider provider = null;
-    	List<FormSubmissionError> ret = new ArrayList<FormSubmissionError>();
-    	if (roleWidget != null) {
-    		role = (EncounterRole) roleWidget.getValue(context, submission);
-    		if (role == null)
-        		ret.add(new FormSubmissionError(roleWidget, Context.getMessageSourceService().getMessage("htmlformentry.error.required")));
-    	}
-    	if (providerWidget != null) {
-    		Object value = providerWidget.getValue(context, submission);
-            provider = (Provider)convertValueToProvider(value);
+        if (!required)
+            return null;
+        EncounterRole role = encounterRole;
+        Provider provider = null;
+        List<FormSubmissionError> ret = new ArrayList<FormSubmissionError>();
+        if (roleWidget != null) {
+            role = (EncounterRole) roleWidget.getValue(context, submission);
+            if (role == null)
+                ret.add(new FormSubmissionError(roleWidget, Context.getMessageSourceService().getMessage("htmlformentry.error.required")));
+        }
+        if (providerWidget != null) {
+            Object value = providerWidget.getValue(context, submission);
+            provider = (Provider) convertValueToProvider(value);
             //
-            // provider = (Provider) HtmlFormEntryUtil.convertToType(value.toString(), Provider.class);
-    		if (provider == null)
-        		ret.add(new FormSubmissionError(providerWidget, Context.getMessageSourceService().getMessage("htmlformentry.error.required")));
-    	}
-    	return ret;
+
+            if (provider == null)
+                ret.add(new FormSubmissionError(providerWidget, Context.getMessageSourceService().getMessage("htmlformentry.error.required")));
+        }
+        return ret;
     }
 
-	/**
+    /**
      * @see org.openmrs.module.htmlformentry.action.FormSubmissionControllerAction#handleSubmission(org.openmrs.module.htmlformentry.FormEntrySession, javax.servlet.http.HttpServletRequest)
      */
     @Override
     public void handleSubmission(FormEntrySession session, HttpServletRequest submission) {
-    	EncounterRole role = encounterRole;
-    	Provider provider = null;
-    	if (roleWidget != null) {
-    		role = (EncounterRole) roleWidget.getValue(session.getContext(), submission);
-    	}
-    	if (providerWidget != null) {
-    		Object value = providerWidget.getValue(session.getContext(), submission);
-            provider = (Provider)convertValueToProvider(value);
-            //provider = (Provider) HtmlFormEntryUtil.convertToType(value.toString(), Provider.class);
-    	}
-    	if (provider != null) {
-    		session.getSubmissionActions().getCurrentEncounter().setProvider(role, provider);
-    	} else if (role != null) {
-    		// role != null while provider == null is something like "Doctor: null", so clear providers from that role
-    		Encounter encounter = session.getSubmissionActions().getCurrentEncounter();  		
-    		for (Provider p : encounter.getProvidersByRole(role))
-    			encounter.removeProvider(role, p);
-    	}
+        EncounterRole role = encounterRole;
+        Provider provider = null;
+        if (roleWidget != null) {
+            role = (EncounterRole) roleWidget.getValue(session.getContext(), submission);
+        }
+        if (providerWidget != null) {
+            Object value = providerWidget.getValue(session.getContext(), submission);
+            provider = (Provider) convertValueToProvider(value);
+
+
+        }
+        if (provider != null) {
+            session.getSubmissionActions().getCurrentEncounter().setProvider(role, provider);
+        } else if (role != null) {
+            // role != null while provider == null is something like "Doctor: null", so clear providers from that role
+            Encounter encounter = session.getSubmissionActions().getCurrentEncounter();
+            for (Provider p : encounter.getProvidersByRole(role))
+                encounter.removeProvider(role, p);
+        }
     }
 
-  /**
+    /**
      * Gets provider id and obtains the Provider from it
+     *
      * @param value - provider id
-     * @return  the Provider object of corresponding id
+     * @return the Provider object of corresponding id
      */
     private Object convertValueToProvider(Object value) {
-        String val = (String)value;
-            if (StringUtils.hasText(val)) {
-        	return Context.getProviderService().getProvider(Integer.valueOf(val));
-            }
+        String val = (String) value;
+        val = val.trim();
+        if (StringUtils.hasText(val)) {
+            return Context.getProviderService().getProvider(Integer.valueOf(val));
+        }
         return null;
     }
 
